@@ -6,6 +6,7 @@ def main():
     state = ctf.reset()
 
     while True:
+        ctf.step(0.3, 0.4)
         ctf.render()
 
 if __name__ == "__main__":

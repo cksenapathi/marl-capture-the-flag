@@ -2,6 +2,7 @@ import numpy as np
 import pygame
 import pygame_gui
 import os
+import time
 
 # Player class
 class Player(pygame.sprite.Sprite):
@@ -12,7 +13,6 @@ class Player(pygame.sprite.Sprite):
         self.image = pygame.image.load(image_path)
         self.image = pygame.transform.scale(self.image, (50, 60)) # Resize image
 
-        # Agent stuff
         if pos is None:
             pos = np.array([0, 0])
 
@@ -24,9 +24,8 @@ class Player(pygame.sprite.Sprite):
     def get_pos(self):
         return self.pos
     
-    def step(self, action):
+    def update_pos(self, action):
         self.pos += np.array([np.cos(action), np.sin(action)])
-        self.set_pos(self.pos) # Update grid position
 
 class Team:
     def __init__(self, flag_path, players=[], flag_pos=None) -> None:
@@ -48,25 +47,23 @@ class Team:
     def get_pos(self):
         pos_lst = [p.get_pos() for p in self.players]
         pos_lst.append(self.flag_pos)
+
         return np.asarray(pos_lst)
     
     def apply_action(self, action):
-        for i, p in enumerate(self.players):
-            p.update_pos(action[i])
+        for p in self.players:
+            p.update_pos(action)
 
 class Game:
-    def __init__(self, team_sprite_path, team_flag_path, screen_width=800, screen_height=800) -> None:
-        # Initialize Pygame
-        pygame.init()
-        self.screen = pygame.display.set_mode((screen_width, screen_height))
-        self.clock = pygame.time.Clock()
-        self.manager = pygame_gui.UIManager((screen_width, screen_height))
-
+    def __init__(self, team_sprite_path, team_flag_path, T, screen_width=800, screen_height=800) -> None:
         self.board_dims = np.array([30, 30])
         self.x_scale = 800 / (self.board_dims[0])
         self.y_scale = 800 / (self.board_dims[0])
         self.xmin = 0
         self.ymin = 0
+
+        self.screen_width = screen_width
+        self.screen_height = screen_height
 
         # Team setup
         self.team1 = Team(team_flag_path[0], [Player(team_sprite_path[0]) for _ in range(3)])
@@ -76,6 +73,12 @@ class Game:
         self.team2_bounds = np.array([[0, 20], [30, 30]])
 
         self.player_interaction_radius = 20.0
+
+        self.initialized = False
+
+        # Time steps
+        self.t = 0
+        self.T = T # horizon
 
     def check_distances(self):
         team1_pos = self.team1.get_pos()
@@ -100,27 +103,36 @@ class Game:
 
         team1_dist *= team1_dist<=self.player_interaction_radius
 
-
         team2_dist = np.sqrt(
             ((team2_pos[:, None] - team2_pos[None, :, :])**2).sum(-1)
         )
 
-        team2_dist *= team2_dist<=self.player_interaction_radius
+        team2_dist *= team2_dist <= self.player_interaction_radius
 
-        team1_score = (1.5*team1_dist - inter_team_dist).sum(0)
-        team2_score = (1.5*team2_dist - inter_team_dist).sum(1)
+        team1_score = (1.5 * team1_dist - inter_team_dist).sum(0)
+        team2_score = (1.5 * team2_dist - inter_team_dist).sum(1)
 
         # Check if player is eliminated
             # negative score for player implies death
         # Check if game is over
             # negative score for flag implies capture
 
-
+    # Move one unit step in the direction specified
     def step(self, team1_action, team2_action):
+        if not self.initialized:
+            raise ValueError("Environment not initialized. Call reset() before calling step().")
+        
         self.team1.apply_action(team1_action)
         self.team2.apply_action(team2_action)
 
+        self.t += 1
+
     def render(self):
+        if not self.initialized:
+            raise ValueError("Environment not initialized. Call reset() before calling render().")
+        
+        time.sleep(0.075)
+
         # Clear screen
         self.screen.fill((209, 255, 214))
 
@@ -131,7 +143,7 @@ class Game:
 
         # Draw the line on the transparent surface
         mid_y = self.screen.get_height() // 2  # Middle of the screen (Y-coordinate)
-        pygame.draw.line(line_surface, (0, 0, 0, 150), (0, 0), (self.screen.get_width(), 0), 5)  # Line with alpha
+        pygame.draw.line(line_surface, (0, 0, 0, 120), (0, 0), (self.screen.get_width(), 0), 5)  # Line with alpha
 
         # Blit the transparent line surface onto the main screen at the correct position
         self.screen.blit(line_surface, (0, mid_y - 2))  # Center the line vertically
@@ -143,7 +155,7 @@ class Game:
 
         # Add some transparency to the buffer zone by using a surface
         buffer_zone_surface = pygame.Surface((buffer_zone_width, buffer_zone_height))
-        buffer_zone_surface.set_alpha(100)  # Set alpha for transparency
+        buffer_zone_surface.set_alpha(40)  # Set alpha for transparency
         buffer_zone_surface.fill((0, 0, 0))  # Fill with blue color (can change)
 
         # Blit the buffer zone surface to the screen
@@ -171,7 +183,6 @@ class Game:
 
         pygame.display.flip()
         
-
     def _grid_to_screen(self, pos):
         # Convert grid position to screen coordinates
         screen_x = self.x_scale * (pos[0] - self.xmin)
@@ -183,8 +194,33 @@ class Game:
     def _state(self):
         pass
         
+    @property
+    def _is_terminal(self):
+        self.initialized = False
+
+        # Check if all agents are captured 
+        if len(self.team1.inactive_players) == 3 or len(self.team2.inactive_players) == 3:
+            return True
+        
+        # Check if flag is captured
+        # TODO
+
+        # Check if max time steps reached
+        if self.t == self.T:
+            return True
+
+
 
     def reset(self):
+        self.initialized = True
+
+        # Initialize Pygame
+        pygame.init()
+        self.screen = pygame.display.set_mode((self.screen_width, self.screen_height))
+        self.clock = pygame.time.Clock()
+        self.manager = pygame_gui.UIManager((self.screen_width, self.screen_height))
+
+    
         self.team1.set_random_pos(self.team1_bounds[0], self.team1_bounds[1])
         self.team2.set_random_pos(self.team2_bounds[0], self.team2_bounds[1])
         return self._state
