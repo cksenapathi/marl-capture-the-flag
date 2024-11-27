@@ -6,7 +6,7 @@ def main():
     state = ctf.reset()
 
     while True:
-        ctf.step(0.3, 0.4)
+        ctf.step(ctf.team1.sample_action(), ctf.team2.sample_action())
         ctf.render()
 
 if __name__ == "__main__":

@@ -75,7 +75,7 @@ class Team:
 
 
 class Game:
-    def __init__(self, team_sprite_path, team_flag_path, T, screen_width=800, screen_height=800) -> None:
+    def __init__(self, team_sprite_path, team_flag_path, T=200, screen_width=800, screen_height=800) -> None:
         self.board_dims = np.array([30, 30])
         self.x_scale = 800 / (self.board_dims[0])
         self.y_scale = 800 / (self.board_dims[0])
@@ -168,35 +168,7 @@ class Game:
         self.team1.remove_players(t1_inactive_players)
         self.team2.remove_players(t2_inactive_players)
 
-
-    # Move one unit step in the direction specified
-    def step(self, team1_action, team2_action):
-        if not self.initialized:
-            raise ValueError("Environment not initialized. Call reset() before calling step().")
-        self.team1_reward -= 0.1
-        self.team2_reward -= 0.1
-        self.team1.apply_action(team1_action, self.board_dims)
-        self.team2.apply_action(team2_action, self.board_dims)
-        self._check_distances()
-
-        self.t += 1
-
-    def reset_board(self):
-        self.team1_reward = 0
-        self.team2_reward = 0
-        self.game_done = False
-        self.team1.set_random_pos(self.team1_bounds[0], self.team1_bounds[1])
-        self.team2.set_random_pos(self.team2_bounds[0], self.team2_bounds[1])
-
-
-game = Game()
-game.reset_board()
-
-for _ in range(100):
-    team_1_act = game.team1.sample_action()
-    team_2_act = game.team2.sample_action()
-
-    game.step(team_1_act, team_2_act)
+    
     def render(self):
         if not self.initialized:
             raise ValueError("Environment not initialized. Call reset() before calling render().")
@@ -230,13 +202,13 @@ for _ in range(100):
 
         # Blit the buffer zone surface to the screen
         self.screen.blit(buffer_zone_surface, (0, mid_y - buffer_zone_height // 2))
-        for player in self.team1.players:
+        for player in self.team1.active_players:
             pos = player.get_pos()
             grid_pos = self._grid_to_screen(pos)
 
             self.screen.blit(player.image, grid_pos)
 
-        for player in self.team2.players:
+        for player in self.team2.active_players:
             pos = player.get_pos()
             grid_pos = self._grid_to_screen(pos)
 
@@ -252,18 +224,34 @@ for _ in range(100):
         self.screen.blit(self.team2.flag_image, flag2_screen_pos)
 
         pygame.display.flip()
-        
+
+
+    # Move one unit step in the direction specified
+    def step(self, team1_action, team2_action):
+        if not self.initialized:
+            raise ValueError("Environment not initialized. Call reset() before calling step().")
+        self.team1_reward -= 0.1
+        self.team2_reward -= 0.1
+        self.team1.apply_action(team1_action, self.board_dims)
+        self.team2.apply_action(team2_action, self.board_dims)
+        self._check_distances()
+
+        self.t += 1
+
+
     def _grid_to_screen(self, pos):
         # Convert grid position to screen coordinates
         screen_x = self.x_scale * (pos[0] - self.xmin)
         screen_y = 800 - self.y_scale * (pos[1] - self.ymin)  # Invert Y to match Pygame screen
         return (screen_x, screen_y)   
 
+
     @property
     # Return state
     def _state(self):
         pass
-        
+
+
     @property
     def _is_terminal(self):
         self.initialized = False
@@ -280,8 +268,11 @@ for _ in range(100):
             return True
 
 
-
     def reset(self):
+        self.team1_reward = 0
+        self.team2_reward = 0
+        self.game_done = False
+
         self.initialized = True
 
         # Initialize Pygame
