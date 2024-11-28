@@ -4,6 +4,9 @@ import pygame_gui
 import os
 import time
 
+def dist(p1, p2):
+    return np.sqrt(np.sum((p1-p2)**2, axis=-1))
+
 # Player class
 class Player(pygame.sprite.Sprite):
     def __init__(self, image_path, pos=None) -> None:
@@ -66,12 +69,12 @@ class Team:
         return np.array([np.random.uniform(0, 2*np.pi) for _ in self.active_players])
     
     def remove_players(self, inactive_players):
-        print("Pre Removal ", self.inactive_players, self.active_players)
+        # print("Pre Removal ", self.inactive_players, self.active_players)
         for p in inactive_players:
             self.inactive_players.append(self.active_players[p])
         for p in self.inactive_players:
             self.active_players.remove(p)
-        print("Post Removal ", self.inactive_players, self.active_players)
+        # print("Post Removal ", self.inactive_players, self.active_players)
 
 
 class Game:
@@ -92,7 +95,7 @@ class Game:
         self.team1_bounds = np.array([[0, 0], [30, 10]])
         self.team2_bounds = np.array([[0, 20], [30, 30]])
 
-        self.player_interaction_radius = 5.0
+        self.interaction_radius = 5.0
 
         self.game_done = False
         self.draw = False
@@ -107,39 +110,61 @@ class Game:
         team1_pos = self.team1.get_pos()
         team2_pos = self.team2.get_pos()
 
+        team1_pos, flag1_pos = team1_pos[:-1], team1_pos[-1]
+        team2_pos, flag2_pos = team2_pos[:-1], team2_pos[-1]
+
+        team1_flag_score, team2_flag_score = 0, 0
+        team1_player_score = np.zeros([len(team1_pos)])
+        team2_player_score = np.zeros([len(team2_pos)])
+
+        for pos in team1_pos:
+            team1_flag_score += (1.5*(dist(pos, flag1_pos))*(dist(pos, flag1_pos)<self.interaction_radius))
+            team2_flag_score -= ((dist(pos, flag2_pos)) * (dist(pos, flag2_pos)<self.interaction_radius))
+
+            team1_player_score += (1.5*(dist(pos, team1_pos)) * (dist(pos, team1_pos)<self.interaction_radius))
+            team2_player_score -= ((dist(pos, team2_pos)) * (dist(pos, team2_pos)<self.interaction_radius))
+
+        
+        for pos in team2_pos:
+            team2_flag_score += (1.5*(dist(pos, flag2_pos))*(dist(pos, flag2_pos)<self.interaction_radius))
+            team1_flag_score -= ((dist(pos, flag1_pos)) * (dist(pos, flag1_pos)<self.interaction_radius))
+
+            team2_player_score += (1.5*(dist(pos, team2_pos)) * (dist(pos, team2_pos)<self.interaction_radius))
+            team1_player_score -= ((dist(pos, team1_pos)) * (dist(pos, team1_pos)<self.interaction_radius))
+
         # print(team1_pos)
         # print(team2_pos)
 
         # A[i,j] gives the distance b/w Player i on team 1
         # and Player j on team 2
         # The 4th element of each dimension is the team flag
-        inter_team_dist = np.sqrt(
-            ((team1_pos[:, None] - team2_pos[None, :, :])**2).sum(-1)
-        )
+        # inter_team_dist = np.sqrt(
+        #     ((team1_pos[:, None] - team2_pos[None, :, :])**2).sum(-1)
+        # )
 
-        inter_team_dist *= inter_team_dist<=self.player_interaction_radius
+        # inter_team_dist *= inter_team_dist<=self.interaction_radius
 
-        # Distance between players on Team 1
-        team1_dist = np.sqrt(
-            ((team1_pos[:, None] - team1_pos[None, :, :])**2).sum(-1)
-        )
+        # # Distance between players on Team 1
+        # team1_dist = np.sqrt(
+        #     ((team1_pos[:, None] - team1_pos[None, :, :])**2).sum(-1)
+        # )
 
-        team1_dist *= team1_dist<=self.player_interaction_radius
+        # team1_dist *= team1_dist<=self.interaction_radius
 
-        team2_dist = np.sqrt(
-            ((team2_pos[:, None] - team2_pos[None, :, :])**2).sum(-1)
-        )
+        # team2_dist = np.sqrt(
+        #     ((team2_pos[:, None] - team2_pos[None, :, :])**2).sum(-1)
+        # )
 
-        team2_dist *= team2_dist <= self.player_interaction_radius
+        # team2_dist *= team2_dist <= self.interaction_radius
 
 
-        team1_score = (1.5*team1_dist - inter_team_dist).sum(1)
-        team2_score = (1.5*team2_dist - inter_team_dist).sum(0)
+        # team1_score = (1.5*team1_dist - inter_team_dist).sum(1)
+        # team2_score = (1.5*team2_dist - inter_team_dist).sum(0)
 
-        print(team1_score, team2_score)
+        print(team1_player_score, team2_player_score)
 
-        flag1_cap = team1_score[-1] < 0
-        flag2_cap = team2_score[-1] < 0
+        flag1_cap = team1_flag_score < 0
+        flag2_cap = team2_flag_score < 0
         self.game_done = flag1_cap or flag2_cap
         self.draw = flag2_cap and flag1_cap
 
@@ -159,8 +184,8 @@ class Game:
                 self.team2_reward -= 20
             return
         
-        t1_inactive_players = [i for i,s in enumerate(team1_score[:-1]) if s < 0]
-        t2_inactive_players = [i for i,s in enumerate(team2_score[:-1]) if s < 0]
+        t1_inactive_players = [i for i,s in enumerate(team1_player_score) if s < 0]
+        t2_inactive_players = [i for i,s in enumerate(team2_player_score) if s < 0]
 
         self.team1_reward += (3*len(t2_inactive_players) - 3*len(t1_inactive_players))
         self.team2_reward += (3*len(t1_inactive_players) - 3*len(t2_inactive_players))
