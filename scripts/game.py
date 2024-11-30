@@ -266,6 +266,8 @@ class Game:
 
         self.t += 1
 
+        if self.t >= self.T:
+            self.game_done = True
         # pos_obs = np.concat([self.team1.get_pos(), self.team2.get_pos()]).flatten()
 
         return self.game_done, t1_pos, t2_pos, self.team1.get_action(), self.team2.get_action(), self.team1_reward, self.team2_reward
