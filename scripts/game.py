@@ -20,9 +20,14 @@ class Player(pygame.sprite.Sprite):
             pos = np.array([0, 0])
 
         self.set_pos(pos)
+        self.active = True
+        self.action = 0.0
 
     def set_pos(self, pos):
         self.pos = pos
+
+    def set_action(self, action):
+        self.action = action
 
     def get_pos(self):
         return self.pos
@@ -34,47 +39,60 @@ class Player(pygame.sprite.Sprite):
         np.clip(self.pos, a_min=np.zeros_like(board_dims), a_max=board_dims, out=self.pos)
 
         return self.pos
+    
+    def set_inactive(self):
+        self.active = False
+
+    def set_active(self):
+        self.active = True
 
 
 class Team:
     def __init__(self, flag_path, players=[], flag_pos=None) -> None:
-        self.active_players = players
+        self.players = players
         self.flag_pos = flag_pos
-        self.inactive_players = []
+        # self.inactive_players = []
 
         # Get Sprite
         self.flag_image = pygame.image.load(flag_path)
         self.flag_image = pygame.transform.scale(self.flag_image, (40, 60))
 
     def set_random_pos(self, lo_bound, hi_bound):
-        for player in self.active_players:
+        for player in self.players:
+            player.set_active()
             pos = np.random.uniform(lo_bound, hi_bound)
             player.set_pos(pos)
 
         self.flag_pos = np.random.uniform(lo_bound, hi_bound)
 
     def get_pos(self):
-        pos_lst = [p.get_pos() for p in self.active_players]
+        pos_lst = [p.get_pos() if p.active else np.zeros([2,]) for p in self.players]
         pos_lst.append(self.flag_pos)
 
         return np.asarray(pos_lst)
     
     def apply_action(self, action, board_dims):
-        new_poses = []
-        for i, p in enumerate(self.active_players):
-            new_pos = p.update_pos(action[i], board_dims)
-            new_poses.append(new_pos)
+        new_poses = [p.update_pos(action[i], board_dims) if 
+                     p.active else p.get_pos() for i, p in enumerate(self.players)]
+        
+        return np.asarray(new_poses)
+    
+    def num_active_players(self):
+        return sum([1 if p.active else 0 for p in self.players])
 
     def sample_action(self):
-        return np.array([np.random.uniform(0, 2*np.pi) for _ in self.active_players])
+        return np.array([np.random.uniform(0, 2*np.pi) for _ in self.players])
     
     def remove_players(self, inactive_players):
         # print("Pre Removal ", self.inactive_players, self.active_players)
-        for p in inactive_players:
-            self.inactive_players.append(self.active_players[p])
-        for p in self.inactive_players:
-            self.active_players.remove(p)
+        for p in reversed(inactive_players):
+            self.players[p].set_inactive()
+            self.players[p].set_pos(np.zeros([2,]))
         # print("Post Removal ", self.inactive_players, self.active_players)
+            
+    def get_action(self):
+        return np.array([p.action if p.active else 0.0 for p in self.players])
+
 
 
 class Game:
@@ -107,6 +125,11 @@ class Game:
         self.T = T # horizon
 
     def _check_distances(self):
+
+        if self.team1.num_active_players() == 0 and self.team2.num_active_players() == 0:
+            self.game_done = True
+            return
+
         team1_pos = self.team1.get_pos()
         team2_pos = self.team2.get_pos()
 
@@ -131,37 +154,6 @@ class Game:
 
             team2_player_score += (1.5*(dist(pos, team2_pos)) * (dist(pos, team2_pos)<self.interaction_radius))
             team1_player_score -= ((dist(pos, team1_pos)) * (dist(pos, team1_pos)<self.interaction_radius))
-
-        # print(team1_pos)
-        # print(team2_pos)
-
-        # A[i,j] gives the distance b/w Player i on team 1
-        # and Player j on team 2
-        # The 4th element of each dimension is the team flag
-        # inter_team_dist = np.sqrt(
-        #     ((team1_pos[:, None] - team2_pos[None, :, :])**2).sum(-1)
-        # )
-
-        # inter_team_dist *= inter_team_dist<=self.interaction_radius
-
-        # # Distance between players on Team 1
-        # team1_dist = np.sqrt(
-        #     ((team1_pos[:, None] - team1_pos[None, :, :])**2).sum(-1)
-        # )
-
-        # team1_dist *= team1_dist<=self.interaction_radius
-
-        # team2_dist = np.sqrt(
-        #     ((team2_pos[:, None] - team2_pos[None, :, :])**2).sum(-1)
-        # )
-
-        # team2_dist *= team2_dist <= self.interaction_radius
-
-
-        # team1_score = (1.5*team1_dist - inter_team_dist).sum(1)
-        # team2_score = (1.5*team2_dist - inter_team_dist).sum(0)
-
-        print(team1_player_score, team2_player_score)
 
         flag1_cap = team1_flag_score < 0
         flag2_cap = team2_flag_score < 0
@@ -227,17 +219,19 @@ class Game:
 
         # Blit the buffer zone surface to the screen
         self.screen.blit(buffer_zone_surface, (0, mid_y - buffer_zone_height // 2))
-        for player in self.team1.active_players:
-            pos = player.get_pos()
-            grid_pos = self._grid_to_screen(pos)
+        for player in self.team1.players:
+            if player.active:
+                pos = player.get_pos()
+                grid_pos = self._grid_to_screen(pos)
 
-            self.screen.blit(player.image, grid_pos)
+                self.screen.blit(player.image, grid_pos)
 
-        for player in self.team2.active_players:
-            pos = player.get_pos()
-            grid_pos = self._grid_to_screen(pos)
+        for player in self.team2.players:
+            if player.active:
+                pos = player.get_pos()
+                grid_pos = self._grid_to_screen(pos)
 
-            self.screen.blit(player.image, grid_pos)
+                self.screen.blit(player.image, grid_pos)
 
         # Draw flags
         flag1_pos = self.team1.flag_pos
@@ -255,13 +249,23 @@ class Game:
     def step(self, team1_action, team2_action):
         if not self.initialized:
             raise ValueError("Environment not initialized. Call reset() before calling step().")
-        self.team1_reward -= 0.1
-        self.team2_reward -= 0.1
-        self.team1.apply_action(team1_action, self.board_dims)
-        self.team2.apply_action(team2_action, self.board_dims)
+        
+        if self.t >= self.T:
+            return True, self.team1.get_pos(), self.team2.get_pos(), self.team1.get_action(), self.team2.get_action(), self.team1_reward, self.team2_reward
+        
+        print("\n\n",self.t)
+
+        self.team1_reward = -0.1
+        self.team2_reward = -0.1
+        t1_pos = self.team1.apply_action(team1_action, self.board_dims)
+        t2_pos = self.team2.apply_action(team2_action, self.board_dims)
         self._check_distances()
 
         self.t += 1
+
+        # pos_obs = np.concat([self.team1.get_pos(), self.team2.get_pos()]).flatten()
+
+        return self.game_done, t1_pos, t2_pos, self.team1.get_action(), self.team2.get_action(), self.team1_reward, self.team2_reward
 
 
     def _grid_to_screen(self, pos):
@@ -309,4 +313,5 @@ class Game:
     
         self.team1.set_random_pos(self.team1_bounds[0], self.team1_bounds[1])
         self.team2.set_random_pos(self.team2_bounds[0], self.team2_bounds[1])
-        return self._state
+        
+        return self.team1.get_pos(), self.team2.get_pos()
