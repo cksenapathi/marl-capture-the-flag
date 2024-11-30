@@ -72,9 +72,12 @@ class Team:
         return np.asarray(pos_lst)
     
     def apply_action(self, action, board_dims):
-        new_poses = [p.update_pos(action[i], board_dims) if 
-                     p.active else p.get_pos() for i, p in enumerate(self.players)]
-        
+        if action is None:
+            new_poses = [p.get_pos() for p in self.players]
+        else:
+            new_poses = [p.update_pos(action[i], board_dims) if 
+                        p.active else p.get_pos() for i, p in enumerate(self.players)]
+            
         return np.asarray(new_poses)
     
     def num_active_players(self):

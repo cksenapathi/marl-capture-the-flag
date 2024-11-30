@@ -3,29 +3,26 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-def train_agent(env, agent_name, save_dir, total_timestaps):
+def train_agent(env, agent_name, save_dir, total_timesteps, epoch, render_interval=100):
     """
     Tran a PPO agent
     """
-
-    os.makedris(save_dir, exist_ok=True)
-    model_path = os.path.join(save_dir, f"{agent_name}.zip")
-
-    # Load existing model or initialize new one
-    if os.path.exists(model_path):
-        print(f"Loading model for {agent_name}")
-        model = PPO.load(model_path, env)
-    else:
-        print(f"Creating new model for {agent_name}")
-        model = PPO("MlpPolicy", env, verbose=1)
+    model = PPO("MlpPolicy", env, verbose=1)
 
     checkpoint_callback = CheckpointCallback(save_freq=10000, save_path=save_dir, name_prefix=agent_name)
 
     # Train the model
-    model.learn(total_timesteps=total_timestaps, callback=checkpoint_callback)
+    # Train the model
+    for timestep in range(total_timesteps):
+        model.learn(total_timesteps=1, reset_num_timesteps=False, callback=checkpoint_callback)
+        
+        # Render the environment every `render_interval` timesteps
+        if timestep % render_interval == 0:
+            env.render()
 
-    model.save(model_path)
-    print(f"Model saved for {agent_name} at {model_path}")
+    save_path = os.path.join(save_dir, f"{agent_name}_epoch_{epoch}.zip")
+    model.save(save_path)
+    print(f"{agent_name} policy saved to {save_path}")
 
 def self_play_training(env, save_dir, total_timesteps, self_play_epochs):
     """
@@ -35,16 +32,29 @@ def self_play_training(env, save_dir, total_timesteps, self_play_epochs):
     team1_dir = os.path.join(save_dir, "team1")
     team2_dir = os.path.join(save_dir, "team2")
 
+    # Ensure dirs exist
+    os.makedirs(team1_dir, exist_ok=True)
+    os.makedirs(team2_dir, exist_ok=True)
+
     for epoch in range(self_play_epochs):
         print(f"=== Epoch {epoch + 1}/{self_play_epochs} ===")
 
-        print("Training team 1...")
-        env.game.team2.set_policy(os.path.join(team2_dir, "team2.zip"))
-        train_agent(env, "team1", team1_dir, total_timesteps)
+        if epoch == 0:
+            print("Using stationary Team 2 for initial training")
+            env.set_opponent_policy("stationary", None)
+        else:
+            print("Setting team 2's policy to previously trained team 1 policy")
+            prev_policy = os.path.join(team1_dir, f"team1_epoch_{epoch - 1}.zip")
 
-        # Train team 2 against team 2
-        print("Training team 2...")
-        env.game.team1.set_policy(os.path.join(team1_dir, "team1.zip"))
-        train_agent(env, "team2", team2_dir, total_timesteps)
+            if os.path.exists(prev_policy):
+                env.set_opponent_policy("learned", PPO.load(prev_policy))
+            else:
+                print(f"Warning: Previous policy {prev_policy} not found. Using stationary opponent instead.")
+                env.set_opponent_policy("stationary", None)
+
+        # Train Team 1
+        print("Training Team 1...")
+        train_agent(env, "team1", team1_dir, total_timesteps, epoch)    
+
 
     print("Self play training complete")
