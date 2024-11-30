@@ -10,10 +10,10 @@ class CTFEnv(gym.Env):
     Gym wrapper for the Capture the Flag game.
     """
 
-    metadata = {"render.modes": ["human"]}
+    metadata = {"render.modes": ["human"], "render_fps": 30}
 
     def __init__(self, team_sprite_path, team_flag_path, T=200, screen_width=800, screen_height=800):
-        super(CTFEnv, self).__init__()
+        super().__init__()
 
         # Initialize the game
         self.game = Game(
@@ -29,11 +29,20 @@ class CTFEnv(gym.Env):
         obs_dim = 2 * (2 * len(self.game.team1.players) + 2) # Positions of players and flags (x, y)
         self.observation_space = spaces.Box(low=0, high=30, shape=(obs_dim,), dtype=np.float32)
 
-        # Angles for team members
-        self.action_space = spaces.Box(low=0, high=2 * np.pi, shape=(len(self.game.team1.players),), dtype=np.float32)
+        # Angles for team members (scaled)
+        self.action_space = spaces.Box(low=-1, high=1, shape=(len(self.game.team1.players),), dtype=np.float32)
+
+        # self.action_space = spaces.Box(low=0, high=2 * np.pi, shape=(len(self.game.team1.players),), dtype=np.float32)
 
         self.opponent_policy = "stationary"
         self.opponent_model = None
+
+    def rescale_action(self, action):
+        # Rescale action from [-1, 1] to [0, 2π]
+        if action is not None:
+            return (action + 1) * np.pi
+        else:
+            return None
 
     def set_opponent_policy(self, policy_type, model=None):
         self.opponent_policy = policy_type
@@ -79,11 +88,11 @@ class CTFEnv(gym.Env):
         team1_pos, team2_pos = self.game.reset()
 
         obs = np.concatenate((team1_pos.flatten(), team2_pos.flatten()))
-        return obs, {}
+        return np.array(obs, dtype=np.float32), {}
     
     def step(self, action):
-        team1_action = action
-        team2_action = self._get_opponent_action()
+        team1_action = self.rescale_action(action)
+        team2_action = self.rescale_action(self._get_opponent_action())
 
         # Step the game
         done, t1_pos, t2_pos, t1_act, t2_act, team1_reward, team2_reward = self.game.step(
@@ -99,8 +108,13 @@ class CTFEnv(gym.Env):
         reward = team1_reward
         truncated = False
 
-        return obs, reward, done, truncated, {}
+        if done:
+            print("Game done.")
+        return np.array(obs, dtype=np.float32), reward, bool(done), truncated, {}
     
     def render(self, mode='human'):
         self.game.render()
+
+    def close(self):
+        pass
 

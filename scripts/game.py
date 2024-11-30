@@ -268,9 +268,11 @@ class Game:
 
         if self.t >= self.T:
             self.game_done = True
+
+        done = self.game_done
         # pos_obs = np.concat([self.team1.get_pos(), self.team2.get_pos()]).flatten()
 
-        return self.game_done, t1_pos, t2_pos, self.team1.get_action(), self.team2.get_action(), self.team1_reward, self.team2_reward
+        return done, t1_pos, t2_pos, self.team1.get_action(), self.team2.get_action(), self.team1_reward, self.team2_reward
 
 
     def _grid_to_screen(self, pos):
