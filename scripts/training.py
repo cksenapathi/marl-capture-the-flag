@@ -3,11 +3,12 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-def train_agent(env, agent_name, save_dir, total_timesteps, epoch, render_interval=100):
+def train_agent(env, agent_name, save_dir, total_timesteps, epoch, model=None, render_interval=100):
     """
     Tran a PPO agent
     """
-    model = PPO("MlpPolicy", env, verbose=1)
+    if model is None:
+        model = PPO("MlpPolicy", env, verbose=1)
 
     checkpoint_callback = CheckpointCallback(save_freq=10000, save_path=save_dir, name_prefix=agent_name)
 
@@ -24,6 +25,8 @@ def train_agent(env, agent_name, save_dir, total_timesteps, epoch, render_interv
     model.save(save_path)
     print(f"{agent_name} policy saved to {save_path}")
 
+    return model
+
 def self_play_training(env, save_dir, total_timesteps, self_play_epochs):
     """
     Perform self-play trianing for two agents
@@ -35,6 +38,8 @@ def self_play_training(env, save_dir, total_timesteps, self_play_epochs):
     # Ensure dirs exist
     os.makedirs(team1_dir, exist_ok=True)
     os.makedirs(team2_dir, exist_ok=True)
+
+    model_team1 = None
 
     for epoch in range(self_play_epochs):
         print(f"=== Epoch {epoch + 1}/{self_play_epochs} ===")
@@ -54,7 +59,7 @@ def self_play_training(env, save_dir, total_timesteps, self_play_epochs):
 
         # Train Team 1
         print("Training Team 1...")
-        train_agent(env, "team1", team1_dir, total_timesteps, epoch)    
+        model_team1 = train_agent(env, "team1", team1_dir, total_timesteps, epoch, model=model_team1)    
 
 
     print("Self play training complete")
