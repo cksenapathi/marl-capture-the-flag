@@ -85,6 +85,7 @@ class CTFEnv(gym.Env):
 
 
     def reset(self, seed: Optional[int] = None, options: Optional[dict] = None):
+        print("Resetting evironment")
         team1_pos, team2_pos = self.game.reset()
 
         obs = np.concatenate((team1_pos.flatten(), team2_pos.flatten()))
@@ -110,6 +111,7 @@ class CTFEnv(gym.Env):
 
         if done:
             print("Game done.")
+
         return np.array(obs, dtype=np.float32), reward, bool(done), truncated, {}
     
     def render(self, mode='human'):

@@ -308,6 +308,7 @@ class Game:
         self.team1_reward = 0
         self.team2_reward = 0
         self.game_done = False
+        self.t = 0
 
         self.initialized = True
 
