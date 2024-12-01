@@ -2,6 +2,9 @@ import os
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import CheckpointCallback
+import vidmaker
+import pygame
+import numpy as np
 
 def train_agent(env, agent_name, save_dir, total_timesteps, epoch, model=None, render_interval=100):
     """
@@ -63,3 +66,28 @@ def self_play_training(env, save_dir, total_timesteps, self_play_epochs):
 
 
     print("Self play training complete")
+
+
+    def validation(env, num_episodes, team1_model, opponent_model):
+        metrics = {}
+        win_loss = np.array()
+
+        for episode in range(num_episodes):
+            video = vidmaker.Video(f"../videos/episode_{episode}.mp4", late_export=True)
+
+            env.set_opponent_policy("learned", opponent_model)
+
+            obs, info = env.reset()
+
+            done = False
+            while not done:
+                env.render()
+                video.update(pygame.surfarray.pixels3d(env.game.screen).swapaxes(0, 1), inverted=False) 
+
+                act = team1_model.predict(obs)[0]
+                obs, reward, done, trunc, info = env.step(act)
+
+            video.export(verbose=True)
+
+        
+        return metrics
