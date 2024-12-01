@@ -62,8 +62,8 @@ class CTFEnv(gym.Env):
             t2_pos = self.game.team2.get_pos().flatten()  # Team 2 player positions
 
             # Flip positions to make it look like Team 2's side is the "home side"
-            board_width = self.game.board_width
-            board_height = self.game.board_height
+            board_width = self.game.board_dims[0]
+            board_height = self.game.board_dims[1]
             
             # Flip x-coordinates and y-coordinates for both teams and flags
             flipped_t1_pos = np.array([[board_width - x, board_height - y] for x, y in t1_pos.reshape(-1, 2)]).flatten()
