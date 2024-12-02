@@ -68,26 +68,32 @@ def self_play_training(env, save_dir, total_timesteps, self_play_epochs):
     print("Self play training complete")
 
 
-    def validation(env, num_episodes, team1_model, opponent_model):
-        metrics = {}
-        win_loss = np.array()
+def validation(env, num_episodes, team1_model, opponent_model, model1, model2, frequency=20):
+    wins =  []
 
-        for episode in range(num_episodes):
-            video = vidmaker.Video(f"../videos/episode_{episode}.mp4", late_export=True)
+    for episode in range(num_episodes):
+        if episode % frequency == 0:
+            video = vidmaker.Video(f"../videos/episode_{episode}_{model1}vs{model2}.mp4", late_export=True)
 
-            env.set_opponent_policy("learned", opponent_model)
+        env.set_opponent_policy("learned", opponent_model)
 
-            obs, info = env.reset()
+        obs, info = env.reset()
 
-            done = False
-            while not done:
-                env.render()
+        done = False
+        while not done:
+            env.render()
+
+            if episode % frequency == 0:
                 video.update(pygame.surfarray.pixels3d(env.game.screen).swapaxes(0, 1), inverted=False) 
 
-                act = team1_model.predict(obs)[0]
-                obs, reward, done, trunc, info = env.step(act)
+            act = team1_model.predict(obs)[0]
+            obs, reward, done, trunc, info = env.step(act)
 
+            if done:
+                wins.append(info)
+
+
+        if episode % frequency == 0:
             video.export(verbose=True)
 
-        
-        return metrics
+    return wins

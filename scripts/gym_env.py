@@ -110,9 +110,12 @@ class CTFEnv(gym.Env):
         truncated = False
 
         if done:
+            info = self.game.winner
             print("Game done.")
+        else:
+            info = {}
 
-        return np.array(obs, dtype=np.float32), reward, bool(done), truncated, {}
+        return np.array(obs, dtype=np.float32), reward, bool(done), truncated, info
     
     def render(self, mode='human'):
         self.game.render()

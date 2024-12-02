@@ -268,6 +268,7 @@ class Game:
 
         if self.t >= self.T:
             self.game_done = True
+            self.winner = -1
 
         done = self.game_done
         # pos_obs = np.concat([self.team1.get_pos(), self.team2.get_pos()]).flatten()
